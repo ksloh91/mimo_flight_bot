@@ -361,9 +361,9 @@ def load_routes() -> list[dict]:
 
 
 def main() -> int:
-    serpapi_key = os.environ.get("SERPAPI_API_KEY")
-    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    serpapi_key = (os.environ.get("SERPAPI_API_KEY") or "").strip()
+    telegram_token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    telegram_chat_id = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
 
     missing = [
         name
