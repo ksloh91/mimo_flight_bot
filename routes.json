@@ -1,0 +1,9 @@
+[
+  {
+    "departure_id": "KUL",
+    "arrival_id": "NRT",
+    "outbound_date": "2027-01-11",
+    "return_date": "2027-01-21",
+    "currency": "MYR"
+  }
+]
