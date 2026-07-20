@@ -254,6 +254,32 @@ def format_alert_message(route: dict, top_flights: list[dict], evaluation: dict)
     return "\n".join(lines)
 
 
+def format_price_update_message(route: dict, top_flights: list[dict], evaluation: dict) -> str:
+    cheapest = top_flights[0]
+    label = escape_markdown(route_label(route))
+    airline = escape_markdown(cheapest["airline"])
+    price = cheapest["price"]
+    currency = route.get("currency", "MYR")
+
+    lines = ["✈️ *Price check*", "", f"*Route:* {label}", f"💰 *Price:* {price:,.0f} {currency}"]
+
+    if evaluation["median_price"] is not None:
+        lines.append(f"📊 Historical median: {evaluation['median_price']:,.0f} {currency}")
+
+    lines.append(f"🛫 *Airline:* {airline}")
+    if cheapest.get("total_duration"):
+        hours, minutes = divmod(cheapest["total_duration"], 60)
+        lines.append(f"⏱️ *Duration:* {hours}h {minutes}m")
+
+    lines.append(f"📅 *Dates:* {route['outbound_date']}" + (f" - {route['return_date']}" if route.get("return_date") else ""))
+
+    if cheapest.get("google_flights_url"):
+        lines.append("")
+        lines.append(f"[View / purchase on Google Flights]({cheapest['google_flights_url']})")
+
+    return "\n".join(lines)
+
+
 def send_telegram_alert(message: str, bot_token: str, chat_id: str) -> bool:
     url = f"{TELEGRAM_API_BASE}/bot{bot_token}/sendMessage"
     payload = {
@@ -358,7 +384,7 @@ def main() -> int:
         return 1
 
     history = load_price_history()
-    alerts_sent = 0
+    messages_sent = 0
 
     for route in routes:
         label = route_label(route)
@@ -390,8 +416,10 @@ def main() -> int:
 
             if evaluation["is_deal"]:
                 message = format_alert_message(route, top_flights, evaluation)
-                if send_telegram_alert(message, telegram_token, telegram_chat_id):
-                    alerts_sent += 1
+            else:
+                message = format_price_update_message(route, top_flights, evaluation)
+            if send_telegram_alert(message, telegram_token, telegram_chat_id):
+                messages_sent += 1
 
             update_history_entry(history, route, current_price)
 
@@ -400,7 +428,7 @@ def main() -> int:
             continue
 
     save_price_history(history)
-    log.info("Run complete. %s alert(s) sent.", alerts_sent)
+    log.info("Run complete. %s message(s) sent.", messages_sent)
 
     if os.environ.get("GITHUB_ACTIONS") == "true":
         commit_and_push_history()
