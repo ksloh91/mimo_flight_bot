@@ -6,6 +6,7 @@
     "earliest_departure": "2027-01-05",
     "latest_departure": "2027-01-15",
     "min_nights": 7,
-    "max_nights": 10
+    "max_nights": 10,
+    "combos_per_run": 3
   }
 ]

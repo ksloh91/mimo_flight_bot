@@ -283,79 +283,51 @@ def format_window_best_line(window_best: dict | None, currency: str) -> str | No
     )
 
 
-def format_alert_message(
-    route: dict, top_flights: list[dict], evaluation: dict, window_best: dict | None = None
-) -> str:
-    cheapest = top_flights[0]
+def format_batch_message(route: dict, results: list[dict], window_best: dict | None) -> str:
+    """Build one consolidated Telegram message covering every date/night
+    combo checked this run for a route. `results` is a list of dicts with
+    keys: candidate, current_price, top_flight, evaluation (in the order
+    they were checked)."""
     label = escape_markdown(route_label(route))
-    airline = escape_markdown(cheapest["airline"])
-    price = cheapest["price"]
     currency = route.get("currency", "MYR")
+    any_deal = any(r["evaluation"]["is_deal"] for r in results)
 
-    lines = ["🚨 *DEAL ALERT!* 🚨", "", f"✈️ *Route:* {label}", f"💰 *Price:* {price:,.0f} {currency}"]
+    header = "🚨 *DEAL ALERT!* 🚨" if any_deal else "✈️ *Price sweep*"
+    lines = [header, "", f"*Route:* {label}", f"*Combos checked:* {len(results)}", ""]
 
-    if evaluation["hard_deal"]:
-        lines.append(f"🎯 Below your hard threshold of {HARD_THRESHOLD_MYR:,.0f} {currency}")
-    if evaluation["median_deal"]:
-        lines.append(
-            f"📉 {evaluation['pct_drop']:.1f}% below the historical median "
-            f"({evaluation['median_price']:,.0f} {currency})"
-        )
+    sorted_results = sorted(results, key=lambda r: r["current_price"])
+    for r in sorted_results:
+        candidate = r["candidate"]
+        top_flight = r["top_flight"]
+        evaluation = r["evaluation"]
+        price = r["current_price"]
+        airline = escape_markdown(top_flight["airline"])
 
-    lines.append(f"🛫 *Airline:* {airline}")
-    if cheapest.get("total_duration"):
-        hours, minutes = divmod(cheapest["total_duration"], 60)
-        lines.append(f"⏱️ *Duration:* {hours}h {minutes}m")
+        marker = ""
+        if evaluation["hard_deal"]:
+            marker = " 🎯"
+        elif evaluation["median_deal"]:
+            marker = f" 📉{evaluation['pct_drop']:.0f}%"
 
-    lines.append(f"📅 *Dates:* {route['outbound_date']}" + (f" - {route['return_date']}" if route.get("return_date") else ""))
+        duration_str = ""
+        if top_flight.get("total_duration"):
+            hours, minutes = divmod(top_flight["total_duration"], 60)
+            duration_str = f", {hours}h{minutes}m"
 
-    if len(top_flights) > 1:
+        date_range = f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
+        lines.append(f"• {date_range}: {price:,.0f} {currency} — {airline}{duration_str}{marker}")
+        if top_flight.get("google_flights_url") and (evaluation["is_deal"] or r is sorted_results[0]):
+            lines.append(f"  [View]({top_flight['google_flights_url']})")
+
+    if any(r["evaluation"]["median_price"] is not None for r in results):
+        median_price = next(r["evaluation"]["median_price"] for r in results if r["evaluation"]["median_price"] is not None)
         lines.append("")
-        lines.append("*Other cheap options:*")
-        for flight in top_flights[1:]:
-            lines.append(f"  • {flight['price']:,.0f} {currency} — {escape_markdown(flight['airline'])}")
+        lines.append(f"📊 Historical median for this window: {median_price:,.0f} {currency}")
 
     window_best_line = format_window_best_line(window_best, currency)
     if window_best_line:
         lines.append("")
         lines.append(window_best_line)
-
-    if cheapest.get("google_flights_url"):
-        lines.append("")
-        lines.append(f"[View on Google Flights]({cheapest['google_flights_url']})")
-
-    return "\n".join(lines)
-
-
-def format_price_update_message(
-    route: dict, top_flights: list[dict], evaluation: dict, window_best: dict | None = None
-) -> str:
-    cheapest = top_flights[0]
-    label = escape_markdown(route_label(route))
-    airline = escape_markdown(cheapest["airline"])
-    price = cheapest["price"]
-    currency = route.get("currency", "MYR")
-
-    lines = ["✈️ *Price check*", "", f"*Route:* {label}", f"💰 *Price:* {price:,.0f} {currency}"]
-
-    if evaluation["median_price"] is not None:
-        lines.append(f"📊 Historical median: {evaluation['median_price']:,.0f} {currency}")
-
-    lines.append(f"🛫 *Airline:* {airline}")
-    if cheapest.get("total_duration"):
-        hours, minutes = divmod(cheapest["total_duration"], 60)
-        lines.append(f"⏱️ *Duration:* {hours}h {minutes}m")
-
-    lines.append(f"📅 *Dates:* {route['outbound_date']}" + (f" - {route['return_date']}" if route.get("return_date") else ""))
-
-    window_best_line = format_window_best_line(window_best, currency)
-    if window_best_line:
-        lines.append("")
-        lines.append(window_best_line)
-
-    if cheapest.get("google_flights_url"):
-        lines.append("")
-        lines.append(f"[View / purchase on Google Flights]({cheapest['google_flights_url']})")
 
     return "\n".join(lines)
 
@@ -496,6 +468,8 @@ def main() -> int:
             batch_size,
         )
 
+        results = []
+        window_best = None
         for candidate in batch:
             candidate_label = (
                 f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
@@ -530,17 +504,25 @@ def main() -> int:
 
                 updated_entry = update_history_entry(history, route, candidate, current_price)
                 window_best = updated_entry.get("best")
-
-                if evaluation["is_deal"]:
-                    message = format_alert_message(leg, top_flights, evaluation, window_best)
-                else:
-                    message = format_price_update_message(leg, top_flights, evaluation, window_best)
-                if send_telegram_alert(message, telegram_token, telegram_chat_id):
-                    messages_sent += 1
+                results.append(
+                    {
+                        "candidate": candidate,
+                        "current_price": current_price,
+                        "top_flight": top_flights[0],
+                        "evaluation": evaluation,
+                    }
+                )
 
             except Exception:
                 log.exception("Unexpected error processing %s %s, continuing.", label, candidate_label)
                 continue
+
+        if results:
+            message = format_batch_message(route, results, window_best)
+            if send_telegram_alert(message, telegram_token, telegram_chat_id):
+                messages_sent += 1
+        else:
+            log.warning("Skipping Telegram message for %s: no combos returned data this run.", label)
 
     save_price_history(history)
     log.info("Run complete. %s message(s) sent.", messages_sent)
