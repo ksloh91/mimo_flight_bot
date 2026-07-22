@@ -2,8 +2,10 @@
   {
     "departure_id": "KUL",
     "arrival_id": "NRT",
-    "outbound_date": "2027-01-11",
-    "return_date": "2027-01-21",
-    "currency": "MYR"
+    "currency": "MYR",
+    "earliest_departure": "2027-01-05",
+    "latest_departure": "2027-01-15",
+    "min_nights": 7,
+    "max_nights": 10
   }
 ]

@@ -2,10 +2,14 @@ name: Flight Deal Tracker
 
 on:
   schedule:
-    # Every 2 hours, 12 runs/day. ~84 SerpApi calls/week, ~168/2 weeks per
-    # route tracked -- stays within the 250/month free-tier quota as long
-    # as routes.json only has 1 route. Drop back to 2x/day (see git history)
-    # once you're done actively hunting for a deal.
+    # Every 2 hours, 12 runs/day. Each route now expands to a date/night-count
+    # window (see routes.json) instead of one fixed date pair; by default only
+    # COMBOS_PER_RUN (default 1) combos from that window are checked per run,
+    # rotating through the rest over subsequent runs -- so API usage per route
+    # stays at ~12 calls/day, same as a single fixed date, while still cycling
+    # through the whole window every few days. Raise COMBOS_PER_RUN (repo
+    # variable/secret) only if your SerpApi quota can absorb more calls/day.
+    # Drop back to 2x/day (see git history) once you're done actively hunting.
     - cron: "0 */2 * * *"
   workflow_dispatch: {}
 

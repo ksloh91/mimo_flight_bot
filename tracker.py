@@ -12,7 +12,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -28,8 +28,9 @@ ROUTES_FILE = Path(os.environ.get("ROUTES_FILE", "routes.json"))
 HISTORY_FILE = Path(os.environ.get("HISTORY_FILE", "price_history.json"))
 
 TOP_N_FLIGHTS = 5
-MAX_HISTORY_ENTRIES_PER_ROUTE = 30
+MAX_HISTORY_ENTRIES_PER_WINDOW = 90
 MIN_HISTORY_FOR_MEDIAN_CHECK = 3
+DEFAULT_COMBOS_PER_RUN = int(os.environ.get("COMBOS_PER_RUN", "1"))
 
 DROP_THRESHOLD_PCT = float(os.environ.get("DROP_THRESHOLD_PCT", "15"))
 HARD_THRESHOLD_MYR = float(os.environ.get("HARD_THRESHOLD_MYR", "1500"))
@@ -149,20 +150,57 @@ def save_price_history(history: dict) -> None:
         log.error("Failed to write %s: %s", HISTORY_FILE, exc)
 
 
-def route_key(route: dict) -> str:
+def window_key(route: dict) -> str:
+    """Identifies a route's search window (not a single date pair), so price
+    history and the rotation cursor pool across every date/trip-length combo
+    the window covers. Changing the window bounds starts a fresh baseline."""
     return "-".join(
         [
             route["departure_id"],
             route["arrival_id"],
-            route["outbound_date"],
-            route.get("return_date") or "oneway",
             route.get("currency", "MYR"),
+            route["earliest_departure"],
+            route["latest_departure"],
+            str(route["min_nights"]),
+            str(route["max_nights"]),
         ]
     )
 
 
 def route_label(route: dict) -> str:
     return f"{route['departure_id']} -> {route['arrival_id']}"
+
+
+def generate_date_candidates(route: dict) -> list[dict]:
+    """Expand a route's departure window + nights range into every
+    (outbound_date, return_date, nights) combo, sorted by departure date then
+    trip length."""
+    try:
+        earliest = datetime.strptime(route["earliest_departure"], "%Y-%m-%d").date()
+        latest = datetime.strptime(route["latest_departure"], "%Y-%m-%d").date()
+        min_nights = int(route["min_nights"])
+        max_nights = int(route["max_nights"])
+    except (KeyError, ValueError) as exc:
+        log.error("Invalid date window for route %s: %s", route_label(route), exc)
+        return []
+
+    if earliest > latest or min_nights > max_nights or min_nights < 1:
+        log.error("Invalid date window bounds for route %s.", route_label(route))
+        return []
+
+    candidates = []
+    day_count = (latest - earliest).days + 1
+    for offset in range(day_count):
+        departure = earliest + timedelta(days=offset)
+        for nights in range(min_nights, max_nights + 1):
+            candidates.append(
+                {
+                    "outbound_date": departure.isoformat(),
+                    "return_date": (departure + timedelta(days=nights)).isoformat(),
+                    "nights": nights,
+                }
+            )
+    return candidates
 
 
 # --------------------------------------------------------------------------
@@ -196,14 +234,32 @@ def evaluate_deal(route: dict, current_price: float, history_entry: dict) -> dic
     }
 
 
-def update_history_entry(history: dict, route: dict, current_price: float) -> None:
-    key = route_key(route)
+def update_history_entry(history: dict, route: dict, candidate: dict, current_price: float) -> dict:
+    """Append this observation to the window's pooled price history and
+    update the best combo seen so far. Returns the updated entry."""
+    key = window_key(route)
     entry = history.setdefault(
-        key, {"route_label": route_label(route), "currency": route.get("currency", "MYR"), "prices": []}
+        key,
+        {
+            "route_label": route_label(route),
+            "currency": route.get("currency", "MYR"),
+            "prices": [],
+            "best": None,
+            "cursor": 0,
+        },
     )
     entry["prices"].append(current_price)
-    entry["prices"] = entry["prices"][-MAX_HISTORY_ENTRIES_PER_ROUTE:]
+    entry["prices"] = entry["prices"][-MAX_HISTORY_ENTRIES_PER_WINDOW:]
     entry["last_updated"] = datetime.now(timezone.utc).isoformat()
+
+    if not entry.get("best") or current_price < entry["best"]["price"]:
+        entry["best"] = {
+            "price": current_price,
+            "outbound_date": candidate["outbound_date"],
+            "return_date": candidate["return_date"],
+            "nights": candidate["nights"],
+        }
+    return entry
 
 
 # --------------------------------------------------------------------------
@@ -217,7 +273,19 @@ def escape_markdown(text: str) -> str:
     return text
 
 
-def format_alert_message(route: dict, top_flights: list[dict], evaluation: dict) -> str:
+def format_window_best_line(window_best: dict | None, currency: str) -> str | None:
+    if not window_best:
+        return None
+    return (
+        f"🏆 Best in window so far: {window_best['price']:,.0f} {currency} "
+        f"on {window_best['outbound_date']} - {window_best['return_date']} "
+        f"({window_best['nights']}n)"
+    )
+
+
+def format_alert_message(
+    route: dict, top_flights: list[dict], evaluation: dict, window_best: dict | None = None
+) -> str:
     cheapest = top_flights[0]
     label = escape_markdown(route_label(route))
     airline = escape_markdown(cheapest["airline"])
@@ -247,6 +315,11 @@ def format_alert_message(route: dict, top_flights: list[dict], evaluation: dict)
         for flight in top_flights[1:]:
             lines.append(f"  • {flight['price']:,.0f} {currency} — {escape_markdown(flight['airline'])}")
 
+    window_best_line = format_window_best_line(window_best, currency)
+    if window_best_line:
+        lines.append("")
+        lines.append(window_best_line)
+
     if cheapest.get("google_flights_url"):
         lines.append("")
         lines.append(f"[View on Google Flights]({cheapest['google_flights_url']})")
@@ -254,7 +327,9 @@ def format_alert_message(route: dict, top_flights: list[dict], evaluation: dict)
     return "\n".join(lines)
 
 
-def format_price_update_message(route: dict, top_flights: list[dict], evaluation: dict) -> str:
+def format_price_update_message(
+    route: dict, top_flights: list[dict], evaluation: dict, window_best: dict | None = None
+) -> str:
     cheapest = top_flights[0]
     label = escape_markdown(route_label(route))
     airline = escape_markdown(cheapest["airline"])
@@ -272,6 +347,11 @@ def format_price_update_message(route: dict, top_flights: list[dict], evaluation
         lines.append(f"⏱️ *Duration:* {hours}h {minutes}m")
 
     lines.append(f"📅 *Dates:* {route['outbound_date']}" + (f" - {route['return_date']}" if route.get("return_date") else ""))
+
+    window_best_line = format_window_best_line(window_best, currency)
+    if window_best_line:
+        lines.append("")
+        lines.append(window_best_line)
 
     if cheapest.get("google_flights_url"):
         lines.append("")
@@ -388,44 +468,79 @@ def main() -> int:
 
     for route in routes:
         label = route_label(route)
-        log.info("Checking route %s (%s)", label, route["outbound_date"])
-
-        try:
-            data = fetch_flight_data(route, serpapi_key)
-            if not data:
-                log.warning("Skipping %s: no data returned.", label)
-                continue
-
-            top_flights = extract_top_flights(data)
-            if not top_flights:
-                log.warning("Skipping %s: no priced flights in response.", label)
-                continue
-
-            current_price = top_flights[0]["price"]
-            key = route_key(route)
-            evaluation = evaluate_deal(route, current_price, history.get(key))
-
-            log.info(
-                "%s: current lowest price %.0f %s (median deal=%s, hard deal=%s)",
-                label,
-                current_price,
-                route.get("currency", "MYR"),
-                evaluation["median_deal"],
-                evaluation["hard_deal"],
-            )
-
-            if evaluation["is_deal"]:
-                message = format_alert_message(route, top_flights, evaluation)
-            else:
-                message = format_price_update_message(route, top_flights, evaluation)
-            if send_telegram_alert(message, telegram_token, telegram_chat_id):
-                messages_sent += 1
-
-            update_history_entry(history, route, current_price)
-
-        except Exception:
-            log.exception("Unexpected error processing route %s, continuing.", label)
+        candidates = generate_date_candidates(route)
+        if not candidates:
+            log.warning("Skipping %s: no valid date/night candidates in window.", label)
             continue
+
+        wkey = window_key(route)
+        window_entry = history.setdefault(
+            wkey,
+            {
+                "route_label": label,
+                "currency": route.get("currency", "MYR"),
+                "prices": [],
+                "best": None,
+                "cursor": 0,
+            },
+        )
+        cursor = window_entry.get("cursor", 0) % len(candidates)
+        batch_size = max(1, min(int(route.get("combos_per_run", DEFAULT_COMBOS_PER_RUN)), len(candidates)))
+        batch = [candidates[(cursor + i) % len(candidates)] for i in range(batch_size)]
+        window_entry["cursor"] = (cursor + batch_size) % len(candidates)
+
+        log.info(
+            "Checking route %s: %d candidates in window, %d this run.",
+            label,
+            len(candidates),
+            batch_size,
+        )
+
+        for candidate in batch:
+            candidate_label = (
+                f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
+            )
+            try:
+                leg = dict(route)
+                leg["outbound_date"] = candidate["outbound_date"]
+                leg["return_date"] = candidate["return_date"]
+
+                data = fetch_flight_data(leg, serpapi_key)
+                if not data:
+                    log.warning("Skipping %s %s: no data returned.", label, candidate_label)
+                    continue
+
+                top_flights = extract_top_flights(data)
+                if not top_flights:
+                    log.warning("Skipping %s %s: no priced flights in response.", label, candidate_label)
+                    continue
+
+                current_price = top_flights[0]["price"]
+                evaluation = evaluate_deal(leg, current_price, history.get(wkey))
+
+                log.info(
+                    "%s %s: current lowest price %.0f %s (median deal=%s, hard deal=%s)",
+                    label,
+                    candidate_label,
+                    current_price,
+                    route.get("currency", "MYR"),
+                    evaluation["median_deal"],
+                    evaluation["hard_deal"],
+                )
+
+                updated_entry = update_history_entry(history, route, candidate, current_price)
+                window_best = updated_entry.get("best")
+
+                if evaluation["is_deal"]:
+                    message = format_alert_message(leg, top_flights, evaluation, window_best)
+                else:
+                    message = format_price_update_message(leg, top_flights, evaluation, window_best)
+                if send_telegram_alert(message, telegram_token, telegram_chat_id):
+                    messages_sent += 1
+
+            except Exception:
+                log.exception("Unexpected error processing %s %s, continuing.", label, candidate_label)
+                continue
 
     save_price_history(history)
     log.info("Run complete. %s message(s) sent.", messages_sent)
