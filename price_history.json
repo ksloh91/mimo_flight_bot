@@ -34,9 +34,12 @@
       "return_date": "2027-01-12"
     },
     "currency": "MYR",
-    "cursor": 1,
-    "last_updated": "2026-07-22T06:02:48.407956+00:00",
+    "cursor": 4,
+    "last_updated": "2026-07-22T06:08:31.595297+00:00",
     "prices": [
+      1978,
+      1978,
+      1978,
       1978
     ],
     "route_label": "KUL -> NRT"
