@@ -5,6 +5,7 @@ against locally persisted history, and alerts on Telegram when a route gets
 cheap. Designed to run headless on a GitHub Actions cron schedule.
 """
 
+import itertools
 import json
 import logging
 import os
@@ -125,6 +126,52 @@ def extract_top_flights(data: dict, top_n: int = TOP_N_FLIGHTS) -> list[dict]:
     return simplified
 
 
+def fetch_itinerary_price(route: dict, candidate: dict, serpapi_key: str) -> dict | None:
+    """Price a multi-city candidate as separate one-way tickets, one per leg,
+    and sum them -- see the multi-city design note in routes.json. Returns a
+    top_flight-shaped dict (same shape as extract_top_flights() entries) with
+    an extra "legs" breakdown, or None if any leg fails to return a priced
+    flight (an itinerary can't be half-priced)."""
+    legs_config = route["legs"]
+    currency = route.get("currency", "MYR")
+
+    priced_legs = []
+    for leg, date in zip(legs_config, candidate["leg_dates"]):
+        leg_route = {
+            "departure_id": leg["from"],
+            "arrival_id": leg["to"],
+            "outbound_date": date,
+            "currency": currency,
+        }
+        data = fetch_flight_data(leg_route, serpapi_key)
+        if not data:
+            return None
+        top_flights = extract_top_flights(data)
+        if not top_flights:
+            return None
+        cheapest = top_flights[0]
+        priced_legs.append(
+            {
+                "from": leg["from"],
+                "to": leg["to"],
+                "date": date,
+                "price": cheapest["price"],
+                "airline": cheapest["airline"],
+                "total_duration": cheapest.get("total_duration"),
+                "google_flights_url": cheapest.get("google_flights_url"),
+            }
+        )
+
+    durations = [l["total_duration"] for l in priced_legs if l.get("total_duration")]
+    return {
+        "price": sum(l["price"] for l in priced_legs),
+        "airline": None,
+        "total_duration": sum(durations) if durations else None,
+        "google_flights_url": None,
+        "legs": priced_legs,
+    }
+
+
 # --------------------------------------------------------------------------
 # Price history persistence
 # --------------------------------------------------------------------------
@@ -171,6 +218,52 @@ def route_label(route: dict) -> str:
     return f"{route['departure_id']} -> {route['arrival_id']}"
 
 
+def is_multi_city(route: dict) -> bool:
+    return "legs" in route
+
+
+def multi_city_route_label(route: dict) -> str:
+    legs = route["legs"]
+    cities = [legs[0]["from"]] + [leg["to"] for leg in legs]
+    return " -> ".join(cities)
+
+
+def multi_city_window_key(route: dict) -> str:
+    """Mirrors window_key() but folds in the full leg chain, so the pooled
+    history/cursor resets if the city sequence or any leg's nights range
+    changes."""
+    legs_sig = "|".join(
+        f"{leg['from']}>{leg['to']}:{leg.get('min_nights', '')}-{leg.get('max_nights', '')}"
+        for leg in route["legs"]
+    )
+    return "-".join(
+        [
+            "multi_city",
+            legs_sig,
+            route.get("currency", "MYR"),
+            route["earliest_departure"],
+            route["latest_departure"],
+        ]
+    )
+
+
+def format_candidate_label(route: dict, candidate: dict) -> str:
+    """Human-readable description of a candidate combo, used for logging and
+    as the persisted label for a window's best-seen combo."""
+    if not is_multi_city(route):
+        return f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
+
+    legs = route["legs"]
+    leg_dates = candidate["leg_dates"]
+    nights = candidate["nights"]
+    parts = []
+    for i, leg in enumerate(legs):
+        parts.append(f"{leg['from']}->{leg['to']} {leg_dates[i]}")
+        if i < len(nights):
+            parts.append(f"(stay {nights[i]}n)")
+    return " ".join(parts)
+
+
 def generate_date_candidates(route: dict) -> list[dict]:
     """Expand a route's departure window + nights range into every
     (outbound_date, return_date, nights) combo, sorted by departure date then
@@ -203,6 +296,50 @@ def generate_date_candidates(route: dict) -> list[dict]:
     return candidates
 
 
+def generate_multi_city_candidates(route: dict) -> list[dict]:
+    """Expand a multi-city route's leg-0 departure window + each
+    intermediate leg's stay-nights range into every combo. Each candidate
+    is {"leg_dates": [<departure date per leg>], "nights": [<stay nights
+    after each non-final leg>]}, sorted by leg-0 departure date."""
+    legs = route.get("legs") or []
+    label = multi_city_route_label(route) if len(legs) >= 2 else "multi-city route"
+
+    if len(legs) < 2:
+        log.error("Multi-city route %s needs at least 2 legs.", label)
+        return []
+
+    try:
+        earliest = datetime.strptime(route["earliest_departure"], "%Y-%m-%d").date()
+        latest = datetime.strptime(route["latest_departure"], "%Y-%m-%d").date()
+        nights_ranges = [
+            range(int(leg["min_nights"]), int(leg["max_nights"]) + 1)
+            for leg in legs[:-1]
+        ]
+    except (KeyError, ValueError) as exc:
+        log.error("Invalid leg/date config for route %s: %s", label, exc)
+        return []
+
+    if earliest > latest or any(r.start > r.stop - 1 or r.start < 1 for r in nights_ranges):
+        log.error("Invalid date window or nights bounds for route %s.", label)
+        return []
+
+    candidates = []
+    day_count = (latest - earliest).days + 1
+    for offset in range(day_count):
+        departure = earliest + timedelta(days=offset)
+        for nights_combo in itertools.product(*nights_ranges):
+            leg_dates = [departure]
+            for nights in nights_combo:
+                leg_dates.append(leg_dates[-1] + timedelta(days=nights))
+            candidates.append(
+                {
+                    "leg_dates": [d.isoformat() for d in leg_dates],
+                    "nights": list(nights_combo),
+                }
+            )
+    return candidates
+
+
 # --------------------------------------------------------------------------
 # Evaluation logic
 # --------------------------------------------------------------------------
@@ -223,7 +360,8 @@ def evaluate_deal(route: dict, current_price: float, history_entry: dict) -> dic
             pct_drop = (median_price - current_price) / median_price * 100
             median_deal = pct_drop >= DROP_THRESHOLD_PCT
 
-    hard_deal = currency == "MYR" and current_price <= HARD_THRESHOLD_MYR
+    hard_threshold = route.get("hard_threshold", HARD_THRESHOLD_MYR)
+    hard_deal = currency == "MYR" and current_price <= hard_threshold
 
     return {
         "is_deal": median_deal or hard_deal,
@@ -234,14 +372,17 @@ def evaluate_deal(route: dict, current_price: float, history_entry: dict) -> dic
     }
 
 
-def update_history_entry(history: dict, route: dict, candidate: dict, current_price: float) -> dict:
+def update_history_entry(
+    history: dict, route: dict, candidate: dict, current_price: float, top_flight: dict
+) -> dict:
     """Append this observation to the window's pooled price history and
     update the best combo seen so far. Returns the updated entry."""
-    key = window_key(route)
+    key = multi_city_window_key(route) if is_multi_city(route) else window_key(route)
+    label = multi_city_route_label(route) if is_multi_city(route) else route_label(route)
     entry = history.setdefault(
         key,
         {
-            "route_label": route_label(route),
+            "route_label": label,
             "currency": route.get("currency", "MYR"),
             "prices": [],
             "best": None,
@@ -255,9 +396,10 @@ def update_history_entry(history: dict, route: dict, candidate: dict, current_pr
     if not entry.get("best") or current_price < entry["best"]["price"]:
         entry["best"] = {
             "price": current_price,
-            "outbound_date": candidate["outbound_date"],
-            "return_date": candidate["return_date"],
-            "nights": candidate["nights"],
+            "label": format_candidate_label(route, candidate),
+            "airline": top_flight.get("airline"),
+            "total_duration": top_flight.get("total_duration"),
+            "legs": top_flight.get("legs"),
         }
     return entry
 
@@ -273,13 +415,46 @@ def escape_markdown(text: str) -> str:
     return text
 
 
+def format_duration(total_duration: int | None) -> str:
+    if not total_duration:
+        return ""
+    hours, minutes = divmod(total_duration, 60)
+    return f", {hours}h{minutes}m"
+
+
+def format_leg_line(leg: dict, currency: str, show_link: bool) -> list[str]:
+    airline = escape_markdown(leg.get("airline") or "Unknown airline")
+    lines = [
+        f"    {leg['from']}->{leg['to']} ({leg['date']}): "
+        f"{leg['price']:,.0f} {currency} — {airline}{format_duration(leg.get('total_duration'))}"
+    ]
+    if show_link and leg.get("google_flights_url"):
+        lines.append(f"      [View]({leg['google_flights_url']})")
+    return lines
+
+
 def format_window_best_line(window_best: dict | None, currency: str) -> str | None:
     if not window_best:
         return None
+
+    label = window_best.get("label")
+    if label is None:
+        # Backward-compat: entries persisted before the "label" field existed.
+        label = (
+            f"{window_best['outbound_date']} - {window_best['return_date']} "
+            f"({window_best['nights']}n)"
+        )
+
+    if window_best.get("legs"):
+        lines = [f"🏆 Best in window so far: {window_best['price']:,.0f} {currency} total on {label}"]
+        for leg in window_best["legs"]:
+            lines.extend(format_leg_line(leg, currency, show_link=False))
+        return "\n".join(lines)
+
+    airline_str = f" — {window_best['airline']}" if window_best.get("airline") else ""
     return (
         f"🏆 Best in window so far: {window_best['price']:,.0f} {currency} "
-        f"on {window_best['outbound_date']} - {window_best['return_date']} "
-        f"({window_best['nights']}n)"
+        f"on {label}{airline_str}{format_duration(window_best.get('total_duration'))}"
     )
 
 
@@ -288,7 +463,8 @@ def format_batch_message(route: dict, results: list[dict], window_best: dict | N
     combo checked this run for a route. `results` is a list of dicts with
     keys: candidate, current_price, top_flight, evaluation (in the order
     they were checked)."""
-    label = escape_markdown(route_label(route))
+    route_label_str = multi_city_route_label(route) if is_multi_city(route) else route_label(route)
+    label = escape_markdown(route_label_str)
     currency = route.get("currency", "MYR")
     any_deal = any(r["evaluation"]["is_deal"] for r in results)
 
@@ -301,7 +477,6 @@ def format_batch_message(route: dict, results: list[dict], window_best: dict | N
         top_flight = r["top_flight"]
         evaluation = r["evaluation"]
         price = r["current_price"]
-        airline = escape_markdown(top_flight["airline"])
 
         marker = ""
         if evaluation["hard_deal"]:
@@ -309,15 +484,21 @@ def format_batch_message(route: dict, results: list[dict], window_best: dict | N
         elif evaluation["median_deal"]:
             marker = f" 📉{evaluation['pct_drop']:.0f}%"
 
-        duration_str = ""
-        if top_flight.get("total_duration"):
-            hours, minutes = divmod(top_flight["total_duration"], 60)
-            duration_str = f", {hours}h{minutes}m"
+        date_range = format_candidate_label(route, candidate)
+        show_link = evaluation["is_deal"] or r is sorted_results[0]
 
-        date_range = f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
-        lines.append(f"• {date_range}: {price:,.0f} {currency} — {airline}{duration_str}{marker}")
-        if top_flight.get("google_flights_url") and (evaluation["is_deal"] or r is sorted_results[0]):
-            lines.append(f"  [View]({top_flight['google_flights_url']})")
+        if top_flight.get("legs"):
+            lines.append(f"• {date_range}: {price:,.0f} {currency} total{marker}")
+            for leg in top_flight["legs"]:
+                lines.extend(format_leg_line(leg, currency, show_link=show_link))
+        else:
+            airline = escape_markdown(top_flight["airline"])
+            lines.append(
+                f"• {date_range}: {price:,.0f} {currency} — {airline}"
+                f"{format_duration(top_flight.get('total_duration'))}{marker}"
+            )
+            if show_link and top_flight.get("google_flights_url"):
+                lines.append(f"  [View]({top_flight['google_flights_url']})")
 
     if any(r["evaluation"]["median_price"] is not None for r in results):
         median_price = next(r["evaluation"]["median_price"] for r in results if r["evaluation"]["median_price"] is not None)
@@ -439,13 +620,14 @@ def main() -> int:
     messages_sent = 0
 
     for route in routes:
-        label = route_label(route)
-        candidates = generate_date_candidates(route)
+        multi_city = is_multi_city(route)
+        label = multi_city_route_label(route) if multi_city else route_label(route)
+        candidates = generate_multi_city_candidates(route) if multi_city else generate_date_candidates(route)
         if not candidates:
             log.warning("Skipping %s: no valid date/night candidates in window.", label)
             continue
 
-        wkey = window_key(route)
+        wkey = multi_city_window_key(route) if multi_city else window_key(route)
         window_entry = history.setdefault(
             wkey,
             {
@@ -471,26 +653,33 @@ def main() -> int:
         results = []
         window_best = None
         for candidate in batch:
-            candidate_label = (
-                f"{candidate['outbound_date']} - {candidate['return_date']} ({candidate['nights']}n)"
-            )
+            candidate_label = format_candidate_label(route, candidate)
             try:
-                leg = dict(route)
-                leg["outbound_date"] = candidate["outbound_date"]
-                leg["return_date"] = candidate["return_date"]
+                if multi_city:
+                    top_flight = fetch_itinerary_price(route, candidate, serpapi_key)
+                    if not top_flight:
+                        log.warning("Skipping %s %s: a leg returned no priced flight.", label, candidate_label)
+                        continue
+                    evaluation_route = route
+                else:
+                    leg = dict(route)
+                    leg["outbound_date"] = candidate["outbound_date"]
+                    leg["return_date"] = candidate["return_date"]
 
-                data = fetch_flight_data(leg, serpapi_key)
-                if not data:
-                    log.warning("Skipping %s %s: no data returned.", label, candidate_label)
-                    continue
+                    data = fetch_flight_data(leg, serpapi_key)
+                    if not data:
+                        log.warning("Skipping %s %s: no data returned.", label, candidate_label)
+                        continue
 
-                top_flights = extract_top_flights(data)
-                if not top_flights:
-                    log.warning("Skipping %s %s: no priced flights in response.", label, candidate_label)
-                    continue
+                    top_flights = extract_top_flights(data)
+                    if not top_flights:
+                        log.warning("Skipping %s %s: no priced flights in response.", label, candidate_label)
+                        continue
+                    top_flight = top_flights[0]
+                    evaluation_route = leg
 
-                current_price = top_flights[0]["price"]
-                evaluation = evaluate_deal(leg, current_price, history.get(wkey))
+                current_price = top_flight["price"]
+                evaluation = evaluate_deal(evaluation_route, current_price, history.get(wkey))
 
                 log.info(
                     "%s %s: current lowest price %.0f %s (median deal=%s, hard deal=%s)",
@@ -502,13 +691,15 @@ def main() -> int:
                     evaluation["hard_deal"],
                 )
 
-                updated_entry = update_history_entry(history, route, candidate, current_price)
+                updated_entry = update_history_entry(
+                    history, route, candidate, current_price, top_flight
+                )
                 window_best = updated_entry.get("best")
                 results.append(
                     {
                         "candidate": candidate,
                         "current_price": current_price,
-                        "top_flight": top_flights[0],
+                        "top_flight": top_flight,
                         "evaluation": evaluation,
                     }
                 )

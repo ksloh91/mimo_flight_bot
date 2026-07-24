@@ -8,5 +8,18 @@
     "min_nights": 7,
     "max_nights": 10,
     "combos_per_run": 3
+  },
+  {
+    "type": "multi_city",
+    "currency": "MYR",
+    "earliest_departure": "2027-01-05",
+    "latest_departure": "2027-01-15",
+    "combos_per_run": 1,
+    "hard_threshold": 3000,
+    "legs": [
+      { "from": "KUL", "to": "TPE", "min_nights": 2, "max_nights": 4 },
+      { "from": "TPE", "to": "NRT", "min_nights": 6, "max_nights": 8 },
+      { "from": "NRT", "to": "KUL" }
+    ]
   }
 ]
