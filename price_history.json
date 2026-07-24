@@ -34,8 +34,8 @@
       "return_date": "2027-01-22"
     },
     "currency": "MYR",
-    "cursor": 23,
-    "last_updated": "2026-07-24T10:15:46.733697+00:00",
+    "cursor": 26,
+    "last_updated": "2026-07-24T13:43:35.113150+00:00",
     "prices": [
       1978,
       1978,
@@ -103,14 +103,17 @@
       2051,
       1879,
       1733,
-      1733
+      1733,
+      1732,
+      1732,
+      1732
     ],
     "route_label": "KUL -> NRT"
   },
   "multi_city-KUL>TPE:2-4|TPE>NRT:6-8|NRT>KUL:--MYR-2027-01-05-2027-01-15": {
     "best": {
       "airline": null,
-      "label": "KUL->TPE 2027-01-05 (stay 2n) TPE->NRT 2027-01-07 (stay 6n) NRT->KUL 2027-01-13",
+      "label": "KUL->TPE 2027-01-05 (stay 2n) TPE->NRT 2027-01-07 (stay 8n) NRT->KUL 2027-01-15",
       "legs": [
         {
           "airline": "Scoot",
@@ -132,23 +135,24 @@
         },
         {
           "airline": "Thai AirAsia X",
-          "date": "2027-01-13",
+          "date": "2027-01-15",
           "from": "NRT",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEzagcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
-          "price": 950,
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTE1agcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 949,
           "to": "KUL",
           "total_duration": 700
         }
       ],
-      "price": 2063,
+      "price": 2062,
       "total_duration": 2290
     },
     "currency": "MYR",
-    "cursor": 2,
-    "last_updated": "2026-07-24T10:15:51.951866+00:00",
+    "cursor": 3,
+    "last_updated": "2026-07-24T13:43:40.785656+00:00",
     "prices": [
       2063,
-      2063
+      2063,
+      2062
     ],
     "route_label": "KUL -> TPE -> NRT -> KUL"
   }
