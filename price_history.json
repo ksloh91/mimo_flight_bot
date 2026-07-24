@@ -34,8 +34,8 @@
       "return_date": "2027-01-22"
     },
     "currency": "MYR",
-    "cursor": 17,
-    "last_updated": "2026-07-24T06:25:28.430451+00:00",
+    "cursor": 20,
+    "last_updated": "2026-07-24T07:58:18.664037+00:00",
     "prices": [
       1978,
       1978,
@@ -97,8 +97,55 @@
       1907,
       2130,
       2119,
-      1974
+      1974,
+      2197,
+      2186,
+      2051
     ],
     "route_label": "KUL -> NRT"
+  },
+  "multi_city-KUL>TPE:2-4|TPE>NRT:6-8|NRT>KUL:--MYR-2027-01-05-2027-01-15": {
+    "best": {
+      "airline": null,
+      "label": "KUL->TPE 2027-01-05 (stay 2n) TPE->NRT 2027-01-07 (stay 6n) NRT->KUL 2027-01-13",
+      "legs": [
+        {
+          "airline": "Scoot",
+          "date": "2027-01-05",
+          "from": "KUL",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA1agcIARIDS1VMcgcIARIDVFBFQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 454,
+          "to": "TPE",
+          "total_duration": 620
+        },
+        {
+          "airline": "Hong Kong Express",
+          "date": "2027-01-07",
+          "from": "TPE",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA3agcIARIDVFBFcgcIARIDTlJUQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 659,
+          "to": "NRT",
+          "total_duration": 970
+        },
+        {
+          "airline": "Thai AirAsia X",
+          "date": "2027-01-13",
+          "from": "NRT",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEzagcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 950,
+          "to": "KUL",
+          "total_duration": 700
+        }
+      ],
+      "price": 2063,
+      "total_duration": 2290
+    },
+    "currency": "MYR",
+    "cursor": 1,
+    "last_updated": "2026-07-24T07:58:24.921699+00:00",
+    "prices": [
+      2063
+    ],
+    "route_label": "KUL -> TPE -> NRT -> KUL"
   }
 }
