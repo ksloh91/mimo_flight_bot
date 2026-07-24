@@ -28,14 +28,15 @@
   },
   "KUL-NRT-MYR-2027-01-05-2027-01-15-7-10": {
     "best": {
-      "nights": 9,
-      "outbound_date": "2027-01-13",
-      "price": 1582,
-      "return_date": "2027-01-22"
+      "airline": "Vietjet",
+      "label": "2027-01-13 - 2027-01-22 (9n)",
+      "legs": null,
+      "price": 1580,
+      "total_duration": 1560
     },
     "currency": "MYR",
-    "cursor": 32,
-    "last_updated": "2026-07-24T17:37:10.672977+00:00",
+    "cursor": 35,
+    "last_updated": "2026-07-24T19:23:53.143967+00:00",
     "prices": [
       1978,
       1978,
@@ -112,7 +113,10 @@
       1860,
       1860,
       1860,
-      1783
+      1783,
+      1657,
+      1657,
+      1580
     ],
     "route_label": "KUL -> NRT"
   },
@@ -153,12 +157,13 @@
       "total_duration": 2290
     },
     "currency": "MYR",
-    "cursor": 5,
-    "last_updated": "2026-07-24T17:37:18.182730+00:00",
+    "cursor": 6,
+    "last_updated": "2026-07-24T19:24:00.862216+00:00",
     "prices": [
       2063,
       2063,
       2062,
+      2063,
       2063,
       2063
     ],
