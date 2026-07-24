@@ -34,8 +34,8 @@
       "return_date": "2027-01-22"
     },
     "currency": "MYR",
-    "cursor": 20,
-    "last_updated": "2026-07-24T07:58:18.664037+00:00",
+    "cursor": 23,
+    "last_updated": "2026-07-24T10:15:46.733697+00:00",
     "prices": [
       1978,
       1978,
@@ -100,7 +100,10 @@
       1974,
       2197,
       2186,
-      2051
+      2051,
+      1879,
+      1733,
+      1733
     ],
     "route_label": "KUL -> NRT"
   },
@@ -141,9 +144,10 @@
       "total_duration": 2290
     },
     "currency": "MYR",
-    "cursor": 1,
-    "last_updated": "2026-07-24T07:58:24.921699+00:00",
+    "cursor": 2,
+    "last_updated": "2026-07-24T10:15:51.951866+00:00",
     "prices": [
+      2063,
       2063
     ],
     "route_label": "KUL -> TPE -> NRT -> KUL"
