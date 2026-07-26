@@ -35,12 +35,9 @@
       "total_duration": 1560
     },
     "currency": "MYR",
-    "cursor": 10,
-    "last_updated": "2026-07-26T20:56:57.501512+00:00",
+    "cursor": 13,
+    "last_updated": "2026-07-26T22:58:34.338269+00:00",
     "prices": [
-      1973,
-      1973,
-      1973,
       2198,
       1907,
       1907,
@@ -127,49 +124,52 @@
       1909,
       1909,
       1833,
-      1974
+      1974,
+      1974,
+      2152,
+      1907
     ],
     "route_label": "KUL -> NRT"
   },
   "multi_city-KUL>TPE:2-4|TPE>NRT:6-8|NRT>KUL:--MYR-2027-01-05-2027-01-15": {
     "best": {
       "airline": null,
-      "label": "KUL->TPE 2027-01-06 (stay 2n) TPE->NRT 2027-01-08 (stay 7n) NRT->KUL 2027-01-15",
+      "label": "KUL->TPE 2027-01-08 (stay 2n) TPE->NRT 2027-01-10 (stay 6n) NRT->KUL 2027-01-16",
       "legs": [
         {
           "airline": "Scoot",
-          "date": "2027-01-06",
+          "date": "2027-01-08",
           "from": "KUL",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA2agcIARIDS1VMcgcIARIDVFBFQAFIAXABmAEC&tfu=EgIIAQ",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA4agcIARIDS1VMcgcIARIDVFBFQAFIAXABmAEC&tfu=EgIIAQ",
           "price": 454,
           "to": "TPE",
-          "total_duration": 1415
+          "total_duration": 620
         },
         {
           "airline": "Thai Lion Air",
-          "date": "2027-01-08",
+          "date": "2027-01-10",
           "from": "TPE",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA4agcIARIDVFBFcgcIARIDTlJUQAFIAXABmAEC&tfu=EgIIAQ",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEwagcIARIDVFBFcgcIARIDTlJUQAFIAXABmAEC&tfu=EgIIAQ",
           "price": 618,
           "to": "NRT",
           "total_duration": 195
         },
         {
           "airline": "Thai AirAsia X",
-          "date": "2027-01-15",
+          "date": "2027-01-16",
           "from": "NRT",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTE1agcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
-          "price": 952,
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTE2agcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 950,
           "to": "KUL",
           "total_duration": 700
         }
       ],
-      "price": 2024,
-      "total_duration": 2310
+      "price": 2022,
+      "total_duration": 1515
     },
     "currency": "MYR",
-    "cursor": 27,
-    "last_updated": "2026-07-26T20:57:03.504768+00:00",
+    "cursor": 28,
+    "last_updated": "2026-07-26T22:58:42.800746+00:00",
     "prices": [
       2063,
       2063,
@@ -197,7 +197,8 @@
       2101,
       2279,
       2266,
-      2263
+      2263,
+      2022
     ],
     "route_label": "KUL -> TPE -> NRT -> KUL"
   }
