@@ -28,19 +28,16 @@
   },
   "KUL-NRT-MYR-2027-01-05-2027-01-15-7-10": {
     "best": {
-      "airline": "Vietjet",
-      "label": "2027-01-11 - 2027-01-18 (7n)",
+      "airline": "Scoot",
+      "label": "2027-01-07 - 2027-01-14 (7n)",
       "legs": null,
-      "price": 1541,
-      "total_duration": 1555
+      "price": 1523,
+      "total_duration": 655
     },
     "currency": "MYR",
-    "cursor": 7,
-    "last_updated": "2026-11-22T14:05:44.339521+00:00",
+    "cursor": 10,
+    "last_updated": "2026-11-22T21:32:53.561241+00:00",
     "prices": [
-      2137,
-      2018,
-      1918,
       1883,
       1805,
       1710,
@@ -127,7 +124,10 @@
       1713,
       1598,
       1598,
-      1598
+      1598,
+      1672,
+      1523,
+      1523
     ],
     "route_label": "KUL -> NRT"
   },
@@ -168,10 +168,9 @@
       "total_duration": 1480
     },
     "currency": "MYR",
-    "cursor": 37,
-    "last_updated": "2026-11-22T14:05:52.298856+00:00",
+    "cursor": 38,
+    "last_updated": "2026-11-22T21:33:01.595480+00:00",
     "prices": [
-      2420,
       2456,
       2420,
       2435,
@@ -260,6 +259,7 @@
       2022,
       2022,
       2022,
+      2059,
       2059
     ],
     "route_label": "KUL -> TPE -> NRT -> KUL"
