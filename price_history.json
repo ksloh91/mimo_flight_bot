@@ -35,12 +35,9 @@
       "total_duration": 655
     },
     "currency": "MYR",
-    "cursor": 2,
-    "last_updated": "2026-11-27T17:51:23.762019+00:00",
+    "cursor": 5,
+    "last_updated": "2026-11-28T01:07:49.862163+00:00",
     "prices": [
-      1878,
-      1802,
-      1878,
       2121,
       2050,
       2132,
@@ -127,6 +124,9 @@
       1610,
       1609,
       1594,
+      1594,
+      1594,
+      1594,
       1594
     ],
     "route_label": "KUL -> NRT"
@@ -134,44 +134,43 @@
   "multi_city-KUL>TPE:2-4|TPE>NRT:6-8|NRT>KUL:--MYR-2027-01-05-2027-01-15": {
     "best": {
       "airline": null,
-      "label": "KUL->TPE 2027-01-05 (stay 2n) TPE->NRT 2027-01-07 (stay 6n) NRT->KUL 2027-01-13",
+      "label": "KUL->TPE 2027-01-10 (stay 3n) TPE->NRT 2027-01-13 (stay 8n) NRT->KUL 2027-01-21",
       "legs": [
         {
           "airline": "Scoot",
-          "date": "2027-01-05",
+          "date": "2027-01-10",
           "from": "KUL",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA1agcIARIDS1VMcgcIARIDVFBFQAFIAXABmAEC&tfu=EgIIAQ",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEwagcIARIDS1VMcgcIARIDVFBFQAFIAXABmAEC&tfu=EgIIAQ",
           "price": 454,
           "to": "TPE",
-          "total_duration": 605
+          "total_duration": 780
+        },
+        {
+          "airline": "Peach Aviation",
+          "date": "2027-01-13",
+          "from": "TPE",
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEzagcIARIDVFBFcgcIARIDTlJUQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 655,
+          "to": "NRT",
+          "total_duration": 195
         },
         {
           "airline": "Scoot",
-          "date": "2027-01-07",
-          "from": "TPE",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTA3agcIARIDVFBFcgcIARIDTlJUQAFIAXABmAEC&tfu=EgIIAQ",
-          "price": 571,
-          "to": "NRT",
-          "total_duration": 180
-        },
-        {
-          "airline": "XiamenAir",
-          "date": "2027-01-13",
+          "date": "2027-01-21",
           "from": "NRT",
-          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTEzagcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
-          "price": 897,
+          "google_flights_url": "https://www.google.com/travel/flights?hl=en&gl=us&curr=MYR&tfs=CBwQAhoeEgoyMDI3LTAxLTIxagcIARIDTlJUcgcIARIDS1VMQAFIAXABmAEC&tfu=EgIIAQ",
+          "price": 760,
           "to": "KUL",
-          "total_duration": 695
+          "total_duration": 625
         }
       ],
-      "price": 1922,
-      "total_duration": 1480
+      "price": 1869,
+      "total_duration": 1600
     },
     "currency": "MYR",
-    "cursor": 50,
-    "last_updated": "2026-11-27T17:51:28.170014+00:00",
+    "cursor": 51,
+    "last_updated": "2026-11-28T01:07:56.916715+00:00",
     "prices": [
-      2149,
       2147,
       2356,
       2341,
@@ -260,7 +259,8 @@
       2089,
       1984,
       2044,
-      2043
+      2043,
+      1869
     ],
     "route_label": "KUL -> TPE -> NRT -> KUL"
   }
